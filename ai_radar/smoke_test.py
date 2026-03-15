@@ -1,6 +1,9 @@
 """Smoke test for AI Radar — validates imports, env vars, and utility functions."""
 import sys
 import os
+import io
+
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ["AI_RADAR_SKIP_VALIDATION"] = "1"

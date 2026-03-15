@@ -1,5 +1,10 @@
 import sys
 import os
+import io
+
+# Fix Windows console encoding for emoji output
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 # Ensure ai_radar directory is in path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
