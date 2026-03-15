@@ -1,0 +1,40 @@
+name: "\U0001F9E0 AI Radar — Daily Run"
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-radar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run AI Radar
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTION_DB_MODELS: ${{ secrets.NOTION_DB_MODELS }}
+          NOTION_DB_TOOLS: ${{ secrets.NOTION_DB_TOOLS }}
+          NOTION_DB_RESEARCH: ${{ secrets.NOTION_DB_RESEARCH }}
+          NOTION_DB_SIGNALS: ${{ secrets.NOTION_DB_SIGNALS }}
+          NOTION_DB_OPPORTUNITIES: ${{ secrets.NOTION_DB_OPPORTUNITIES }}
+          NOTION_DB_BRIEFS: ${{ secrets.NOTION_DB_BRIEFS }}
+          NOTION_DB_OSS_RADAR: ${{ secrets.NOTION_DB_OSS_RADAR }}
+          NOTION_DB_HF_RADAR: ${{ secrets.NOTION_DB_HF_RADAR }}
+          NOTION_DB_ALERTS: ${{ secrets.NOTION_DB_ALERTS }}
+          NOTION_PARENT_PAGE_ID: ${{ secrets.NOTION_PARENT_PAGE_ID }}
+          DRY_RUN: "false"
+        run: cd ai_radar && python main.py

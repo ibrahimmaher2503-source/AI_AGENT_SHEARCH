@@ -1,50 +1,132 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+  Sync Impact Report
+  ==================
+  Version change: 0.0.0 → 1.0.0
+  Modified principles: N/A (initial creation)
+  Added sections:
+    - I. Python-Only, Minimal Dependencies
+    - II. Reliability-First Pipeline
+    - III. Zero Manual Intervention
+    - IV. Deterministic & Idempotent
+    - V. Explicit Simplicity
+    - VI. Print-Only Observability
+    - VII. DRY_RUN Safety Net
+    - Technology Constraints
+    - Development Workflow
+    - Governance
+  Removed sections: None
+  Templates requiring updates:
+    - .specify/templates/plan-template.md ✅ (aligned — no changes needed)
+    - .specify/templates/spec-template.md ✅ (aligned — no changes needed)
+    - .specify/templates/tasks-template.md ✅ (aligned — no changes needed)
+  Follow-up TODOs: None
+-->
+
+# AI Radar Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Python-Only, Minimal Dependencies
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+The entire system MUST be written in Python 3.11+ using only the `requests` library as the sole external dependency. No SDKs (`notion-client`, `google-generativeai`, `tavily-python`), no frameworks (`langchain`, `llama-index`, `pydantic`, `pandas`, `numpy`), no async (`asyncio`, `celery`, `rq`), no databases (`sqlite`, `postgres`, `redis`), and no test frameworks (`pytest`). All external communication happens through REST APIs using `requests` with explicit `timeout` and `try/except` on every call.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### II. Reliability-First Pipeline
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+One failed item MUST NEVER crash the whole pipeline. Every HTTP call MUST include a `timeout` parameter and be wrapped in `try/except`. Failed API calls MUST be logged and skipped — the pipeline continues with remaining items. Gemini JSON parse failures MUST trigger one cleanup retry, then graceful degradation. Notion 429 responses MUST trigger one retry after `time.sleep(2)`, then log and continue. Rate limits MUST be respected with appropriate `time.sleep()` between calls.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### III. Zero Manual Intervention
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+The system MUST run daily via GitHub Actions (8 AM Cairo time / 6 AM UTC) without any human interaction. All configuration comes from environment variables. Missing required variables MUST cause immediate `sys.exit(1)` with a clear error message. The pipeline MUST be fully automated from collection through publication.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### IV. Deterministic & Idempotent
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+Re-running the pipeline MUST NOT create duplicate records. Every Notion write MUST be preceded by a duplicate check: URL match for models/tools/research/signals/alerts, repo full name for OSS Radar, model_id for HF Radar, title for Daily Briefs, title+target for Opportunities. Entity resolution MUST run BEFORE Gemini classification to avoid paying for duplicate analysis. The same input MUST produce the same output.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### V. Explicit Simplicity
+
+Functions MUST be max ~50 lines. No unnecessary abstractions. No placeholder code — every file MUST contain complete, working implementation. No TODO comments. Code MUST be simple, explicit, and readable. Three similar lines of code are better than a premature abstraction. Favor reliability over cleverness.
+
+### VI. Print-Only Observability
+
+All logging MUST use `print()` with consistent `[PREFIX]` format. Prefixes: `[CONFIG]`, `[COLLECTOR]`, `[GITHUB]`, `[HF]`, `[ANALYZER]`, `[PUBLISHER]`, `[BRIEF]`, `[NOTION]`, `[GEMINI]`, `[TAVILY]`, `[MAIN]`, `[SETUP]`, `[SMOKE]`. All comments MUST be in English. No logging libraries.
+
+### VII. DRY_RUN Safety Net
+
+When `DRY_RUN=true`, the system MUST execute all collection, deduplication, classification, and scoring steps normally but MUST skip all Notion writes. Instead, it MUST print the payloads that would have been written. This allows safe testing of the full pipeline without touching production databases.
+
+## Technology Constraints
+
+The following technology choices are NON-NEGOTIABLE:
+
+| Component | Choice |
+|-----------|--------|
+| Language | Python 3.11+ |
+| LLM | Gemini 2.0 Flash via REST API |
+| Web Search | Tavily API via REST |
+| GitHub | GitHub REST API |
+| Hugging Face | HF Hub API via REST |
+| Storage | Notion API via REST |
+| Scheduler | GitHub Actions cron |
+| Dependencies | `requests` only (via pip) |
+
+### Banned Technologies
+
+SDKs: `notion-client`, `google-generativeai`, `tavily-python`
+Frameworks: `langchain`, `llama-index`, `pydantic`, `pandas`, `numpy`
+Async: `asyncio`, `celery`, `rq`
+Databases: `sqlite`, `postgres`, `redis`
+Testing: `pytest`
+Any pip package other than `requests`
+
+## Development Workflow
+
+### Data Flow (Invariant)
+
+```
+Tavily + GitHub API + HF API
+        |
+Entity Resolution (dedup FIRST)
+        |
+Gemini Classification + Radar Scoring
+        |
+Alert Assignment (P1/P2/P3)
+        |
+9 Notion Databases + Daily Brief
+```
+
+### Collection Architecture
+
+- **Layer A**: Official sources — company blogs, product pages, release announcements (via Tavily)
+- **Layer B**: GitHub Radar — new repos, releases, trending signals, AI org watchlist
+- **Layer C**: Hugging Face Radar — new models, high-download models, task-specific discovery
+- **Layer D**: Curated web and news — Tavily search + newsletters + media
+
+### Radar Score Formula (Invariant)
+
+```
+radar_score = 0.30 * novelty + 0.25 * credibility + 0.20 * execution_value + 0.15 * dev_value + 0.10 * agency_value
+```
+
+### Alert Classification (Invariant)
+
+- **P1**: `radar_score >= 80` OR (`source_priority == "high"` AND `radar_score >= 70`) — Notify immediately
+- **P2**: `radar_score >= 55` — Worth testing this week
+- **P3**: `radar_score >= 30` — Archive only
+- **None**: Below 30 — Skip
+
+### Notion Value Normalization
+
+All Notion select/multi-select values MUST be normalized before writing. Never write an invalid select value. Use `normalize_select()` with an allowed values list and a fallback default.
+
+### Arabic Explanation Format
+
+All items in AI Models, AI Tools, OSS Radar, and HF Models Radar MUST include a formatted Arabic explanation with four fields: `ايه_دي`, `هستفيد_منها_ازاي`, `تستحق_وقتك`, `مشابه_لـ` — written in Egyptian Arabic dialect.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+- This constitution supersedes all other development practices for the AI Radar project
+- Amendments require: documentation of change, version increment, and updated ratification date
+- All code MUST verify compliance with these principles before merging
+- Version follows semantic versioning: MAJOR (principle removal/redefinition), MINOR (new principle/expansion), PATCH (clarification/typo)
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-03-15 | **Last Amended**: 2026-03-15
