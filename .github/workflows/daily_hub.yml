@@ -18,7 +18,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install -r ai_radar/requirements.txt
 
       - name: Run AI Radar
         env:

@@ -83,8 +83,8 @@ Scored by Gemini 2.0 Flash. Maps to star rating: 80+ = 5 stars, 60-79 = 4 stars,
 ## Project Structure
 
 ```
+.github/workflows/daily_hub.yml      # Cron: 6 AM UTC daily (at repo root)
 ai_radar/
-  .github/workflows/daily_hub.yml    # Cron: 6 AM UTC daily
   agents/
     __init__.py
     collector.py                      # Layer A+D: Tavily web search
@@ -116,7 +116,7 @@ ai_radar/
 
 ```bash
 cd ai_radar
-pip install requests
+pip install -r requirements.txt
 ```
 
 That's the only dependency. Everything else uses Python 3.11+ standard library.
