@@ -103,6 +103,16 @@ def title_exists_in_database(db_id, title):
     return False
 
 
+def query_database_by_title(db_id, title):
+    """Query a Notion database for pages matching a specific title. Returns list of page dicts."""
+    for prop_name in ["Name", "Title", "Date", "Repo Name", "Model Name", "Alert Title", "Opportunity Title"]:
+        filter_payload = {"property": prop_name, "title": {"equals": title}}
+        results = query_database(db_id, filter_payload)
+        if results:
+            return results
+    return []
+
+
 def field_exists_in_database(db_id, field_name, value):
     """Check if a rich_text field value exists in the database."""
     filter_payload = {"property": field_name, "rich_text": {"equals": value}}

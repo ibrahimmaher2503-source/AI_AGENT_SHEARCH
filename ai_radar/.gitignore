@@ -9,6 +9,8 @@ dist/
 .env.*
 !.env.example
 *.log
+logs/
+.pipeline_data/
 .DS_Store
 Thumbs.db
 *.tmp
