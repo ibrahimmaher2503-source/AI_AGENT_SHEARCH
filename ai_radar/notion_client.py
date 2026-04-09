@@ -82,21 +82,14 @@ def create_page(db_id, properties, icon_emoji="\U0001f916", children=None):
     return None
 
 
+_URL_PROP_NAMES = ["Source URL", "URL"]
+_TITLE_PROP_NAMES = ["Name", "Title", "Date", "Repo Name", "Model Name", "Alert Title", "Opportunity Title"]
+
+
 def url_exists_in_database(db_id, url):
-    """Check if a URL already exists in the database. Checks both 'Source URL' and 'URL' properties."""
-    for prop_name in ["Source URL", "URL"]:
+    """Check if a URL already exists in the database."""
+    for prop_name in _URL_PROP_NAMES:
         filter_payload = {"property": prop_name, "url": {"equals": url}}
-        results = query_database(db_id, filter_payload)
-        if results:
-            return True
-    return False
-
-
-def title_exists_in_database(db_id, title):
-    """Check if a title already exists in the database."""
-    # Try common title property names
-    for prop_name in ["Name", "Title", "Date", "Repo Name", "Model Name", "Alert Title", "Opportunity Title"]:
-        filter_payload = {"property": prop_name, "title": {"equals": title}}
         results = query_database(db_id, filter_payload)
         if results:
             return True
@@ -105,12 +98,27 @@ def title_exists_in_database(db_id, title):
 
 def query_database_by_title(db_id, title):
     """Query a Notion database for pages matching a specific title. Returns list of page dicts."""
-    for prop_name in ["Name", "Title", "Date", "Repo Name", "Model Name", "Alert Title", "Opportunity Title"]:
+    for prop_name in _TITLE_PROP_NAMES:
         filter_payload = {"property": prop_name, "title": {"equals": title}}
         results = query_database(db_id, filter_payload)
         if results:
             return results
     return []
+
+
+def title_exists_in_database(db_id, title):
+    """Check if a title already exists in the database."""
+    return len(query_database_by_title(db_id, title)) > 0
+
+
+def query_database_by_titles(db_id, titles, prop_name="Date"):
+    """Batch-query a Notion database for pages matching any of the given titles. Returns list of page dicts."""
+    if not titles:
+        return []
+    filter_payload = {
+        "or": [{"property": prop_name, "title": {"equals": t}} for t in titles]
+    }
+    return query_database(db_id, filter_payload)
 
 
 def field_exists_in_database(db_id, field_name, value):

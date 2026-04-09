@@ -280,11 +280,16 @@ def build_notion_children_blocks(brief_data: dict) -> list:
 # ---------------------------------------------------------------------------
 def format_arabic_explanation(arabic: dict) -> str:
     """Format Arabic explanation dict into a readable string."""
+    nl = "\n"
+    what = arabic.get("\u0627\u064a\u0647_\u062f\u064a", "")
+    how = arabic.get("\u0647\u0633\u062a\u0641\u064a\u062f_\u0645\u0646\u0647\u0627_\u0627\u0632\u0627\u064a", "")
+    worth = arabic.get("\u062a\u0633\u062a\u062d\u0642_\u0648\u0642\u062a\u0643", "")
+    similar = arabic.get("\u0645\u0634\u0627\u0628\u0647_\u0644\u0640", "")
     return (
-        f"\U0001f50d \u0625\u064a\u0647 \u062f\u064a\u061f\n{arabic.get('\u0627\u064a\u0647_\u062f\u064a', '')}\n\n"
-        f"\U0001f4a1 \u0647\u0633\u062a\u0641\u064a\u062f \u0645\u0646\u0647\u0627 \u0627\u0632\u0627\u064a\u061f\n{arabic.get('\u0647\u0633\u062a\u0641\u064a\u062f_\u0645\u0646\u0647\u0627_\u0627\u0632\u0627\u064a', '')}\n\n"
-        f"\u26a1 \u062a\u0633\u062a\u062d\u0642 \u0648\u0642\u062a\u0643\u061f\n{arabic.get('\u062a\u0633\u062a\u062d\u0642_\u0648\u0642\u062a\u0643', '')}\n\n"
-        f"\U0001f517 \u0645\u0634\u0627\u0628\u0647 \u0644\u0640: {arabic.get('\u0645\u0634\u0627\u0628\u0647_\u0644\u0640', '')}"
+        f"\U0001f50d \u0625\u064a\u0647 \u062f\u064a\u061f{nl}{what}{nl}{nl}"
+        f"\U0001f4a1 \u0647\u0633\u062a\u0641\u064a\u062f \u0645\u0646\u0647\u0627 \u0627\u0632\u0627\u064a\u061f{nl}{how}{nl}{nl}"
+        f"\u26a1 \u062a\u0633\u062a\u062d\u0642 \u0648\u0642\u062a\u0643\u061f{nl}{worth}{nl}{nl}"
+        f"\U0001f517 \u0645\u0634\u0627\u0628\u0647 \u0644\u0640: {similar}"
     )
 
 

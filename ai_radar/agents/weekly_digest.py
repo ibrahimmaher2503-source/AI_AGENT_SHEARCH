@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import config
 import notion_client
 import gemini_client
-from utils import get_today_iso, build_notion_rich_text, build_notion_children_blocks, chunk_rich_text
+from utils import get_today_iso, build_notion_rich_text, chunk_rich_text
 
 log = logging.getLogger("ai_radar.weekly")
 
@@ -52,34 +52,49 @@ Return ONLY valid JSON. No markdown."""
 
 
 def _fetch_daily_briefs(days=7):
-    """Query the Briefs database for pages created in the last N days."""
-    summaries = []
+    """Batch-query the Briefs database for pages from the last N days (single API call)."""
+    titles_by_day = {}
     for i in range(days):
         day = (datetime.utcnow() - timedelta(days=i)).strftime("%Y-%m-%d")
-        title = f"AI Brief \u2014 {day}"
-        results = notion_client.query_database_by_title(config.NOTION_DB_BRIEFS, title)
-        if results:
-            page = results[0]
-            props = page.get("properties", {})
-            exec_summary = ""
-            es_prop = props.get("Executive Summary", {}).get("rich_text", [])
-            if es_prop:
-                exec_summary = "".join(t.get("text", {}).get("content", "") for t in es_prop)
-            top_story = ""
-            ts_prop = props.get("Top Story", {}).get("rich_text", [])
-            if ts_prop:
-                top_story = "".join(t.get("text", {}).get("content", "") for t in ts_prop)
+        titles_by_day[f"AI Brief \u2014 {day}"] = day
 
-            models_count = props.get("Models Count", {}).get("number", 0) or 0
-            tools_count = props.get("Tools Count", {}).get("number", 0) or 0
-            p1_count = props.get("P1 Alerts Count", {}).get("number", 0) or 0
+    pages = notion_client.query_database_by_titles(
+        config.NOTION_DB_BRIEFS, list(titles_by_day.keys()), prop_name="Date"
+    )
 
-            summaries.append(
-                f"### {day}\n"
-                f"Executive Summary: {exec_summary}\n"
-                f"Top Story: {top_story}\n"
-                f"Models: {models_count}, Tools: {tools_count}, P1 Alerts: {p1_count}\n"
-            )
+    # Index pages by their title for ordered output
+    page_map = {}
+    for page in pages:
+        title_prop = page.get("properties", {}).get("Date", {}).get("title", [])
+        if title_prop:
+            page_title = title_prop[0].get("text", {}).get("content", "")
+            page_map[page_title] = page
+
+    summaries = []
+    for title, day in titles_by_day.items():
+        page = page_map.get(title)
+        if not page:
+            continue
+        props = page.get("properties", {})
+        exec_summary = ""
+        es_prop = props.get("Executive Summary", {}).get("rich_text", [])
+        if es_prop:
+            exec_summary = "".join(t.get("text", {}).get("content", "") for t in es_prop)
+        top_story = ""
+        ts_prop = props.get("Top Story", {}).get("rich_text", [])
+        if ts_prop:
+            top_story = "".join(t.get("text", {}).get("content", "") for t in ts_prop)
+
+        models_count = props.get("Models Count", {}).get("number", 0) or 0
+        tools_count = props.get("Tools Count", {}).get("number", 0) or 0
+        p1_count = props.get("P1 Alerts Count", {}).get("number", 0) or 0
+
+        summaries.append(
+            f"### {day}\n"
+            f"Executive Summary: {exec_summary}\n"
+            f"Top Story: {top_story}\n"
+            f"Models: {models_count}, Tools: {tools_count}, P1 Alerts: {p1_count}\n"
+        )
     return "\n".join(summaries) if summaries else "No daily briefs found for this week."
 
 
@@ -118,7 +133,6 @@ def run():
         "Status": {"select": {"name": "Published"}},
     }
 
-    # Build children blocks
     blocks = []
     blocks.append({
         "object": "block", "type": "callout",
@@ -151,7 +165,6 @@ def run():
             "paragraph": {"rich_text": chunk_rich_text(str(content))},
         })
 
-    # Watchlist
     watchlist = digest_data.get("next_week_watchlist", [])
     if watchlist:
         blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -165,7 +178,6 @@ def run():
                 "bulleted_list_item": {"rich_text": [{"text": {"content": str(item)}}]},
             })
 
-    # Arabic summary
     arabic = digest_data.get("arabic_summary", "")
     if arabic:
         blocks.append({"object": "block", "type": "divider", "divider": {}})

@@ -4,6 +4,7 @@ import io
 import json
 import argparse
 import logging
+import requests
 
 # Fix Windows console encoding for emoji output
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
@@ -15,48 +16,45 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config  # This triggers env var validation
 from utils import get_today_iso
 from agents import collector, github_radar, hf_radar, analyzer, publisher, brief_writer
+import github_client
 
-# ---------------------------------------------------------------------------
-# Logging setup
-# ---------------------------------------------------------------------------
-LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-os.makedirs(LOG_DIR, exist_ok=True)
-
-LOG_FILE = os.path.join(LOG_DIR, f"radar_{get_today_iso()}.log")
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(LOG_FILE, encoding="utf-8"),
-    ],
-)
 log = logging.getLogger("ai_radar")
 
-# Intermediate file for passing data between stages
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".pipeline_data")
-os.makedirs(DATA_DIR, exist_ok=True)
-
+# Intermediate files for passing data between separate process invocations
+# (e.g. when the workflow runs --layer collect, then --layer analyze as separate steps).
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(_BASE_DIR, ".pipeline_data")
 SIGNALS_FILE = os.path.join(DATA_DIR, "signals.json")
 ANALYZED_FILE = os.path.join(DATA_DIR, "analyzed.json")
+
+
+def _setup_logging():
+    """Configure logging to stdout + daily log file. Called once from main()."""
+    log_dir = os.path.join(_BASE_DIR, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file = os.path.join(log_dir, f"radar_{get_today_iso()}.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(log_file, encoding="utf-8"),
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------
 # Rate-limit dashboard
 # ---------------------------------------------------------------------------
 def log_rate_limits():
-    """Log remaining API quotas for GitHub. Other APIs don't expose rate headers easily."""
-    import requests
-
+    """Log remaining GitHub API quotas."""
     log.info("--- Rate Limit Dashboard ---")
-
-    # GitHub
     try:
-        headers = {"Accept": "application/vnd.github+json"}
-        if config.GITHUB_TOKEN:
-            headers["Authorization"] = f"Bearer {config.GITHUB_TOKEN}"
-        resp = requests.get("https://api.github.com/rate_limit", headers=headers, timeout=10)
+        resp = requests.get(
+            "https://api.github.com/rate_limit",
+            headers=github_client._headers(),
+            timeout=10,
+        )
         if resp.status_code == 200:
             data = resp.json()
             core = data.get("resources", {}).get("core", {})
@@ -69,15 +67,14 @@ def log_rate_limits():
             log.info(f"GitHub rate limit check returned {resp.status_code}")
     except Exception as e:
         log.info(f"GitHub rate limit check failed: {e}")
-
     log.info("----------------------------")
 
 
 # ---------------------------------------------------------------------------
 # Stage functions
 # ---------------------------------------------------------------------------
-def stage_collect():
-    """Layer A+B+C+D: collect all signals and save to disk."""
+def stage_collect(persist=True):
+    """Layer A+B+C+D: collect all signals, optionally save to disk."""
     log.info("=== Stage: COLLECT ===")
 
     web_signals = collector.run()
@@ -92,13 +89,15 @@ def stage_collect():
     all_signals = web_signals + github_signals + hf_signals
     log.info(f"Total raw signals: {len(all_signals)}")
 
-    with open(SIGNALS_FILE, "w", encoding="utf-8") as f:
-        json.dump(all_signals, f, ensure_ascii=False)
-    log.info(f"Signals saved to {SIGNALS_FILE}")
+    if persist:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(SIGNALS_FILE, "w", encoding="utf-8") as f:
+            json.dump(all_signals, f, ensure_ascii=False)
+        log.info(f"Signals saved to {SIGNALS_FILE}")
     return all_signals
 
 
-def stage_analyze(all_signals=None):
+def stage_analyze(all_signals=None, persist=True):
     """Entity resolution + Gemini classification + scoring."""
     log.info("=== Stage: ANALYZE ===")
 
@@ -120,9 +119,11 @@ def stage_analyze(all_signals=None):
         f"alerts:{len(analyzed['alerts'])}"
     )
 
-    with open(ANALYZED_FILE, "w", encoding="utf-8") as f:
-        json.dump(analyzed, f, ensure_ascii=False)
-    log.info(f"Analyzed data saved to {ANALYZED_FILE}")
+    if persist:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        with open(ANALYZED_FILE, "w", encoding="utf-8") as f:
+            json.dump(analyzed, f, ensure_ascii=False)
+        log.info(f"Analyzed data saved to {ANALYZED_FILE}")
     return analyzed
 
 
@@ -136,7 +137,7 @@ def stage_publish(analyzed=None):
             sys.exit(1)
         with open(ANALYZED_FILE, "r", encoding="utf-8") as f:
             analyzed = json.load(f)
-        log.info(f"Loaded analyzed data from disk")
+        log.info("Loaded analyzed data from disk")
 
     publish_stats = publisher.run(analyzed)
     log.info(f"Publish stats: {publish_stats}")
@@ -159,6 +160,7 @@ def main():
     )
     args = parser.parse_args()
 
+    _setup_logging()
     log.info(f"AI Radar starting — {get_today_iso()}")
     log.info(f"DRY_RUN: {config.DRY_RUN} | Layer: {args.layer}")
 
@@ -173,12 +175,13 @@ def main():
         log.info("=== Stage: WEEKLY DIGEST ===")
         weekly_digest.run()
     else:
-        # Full pipeline
-        all_signals = stage_collect()
-        analyzed = stage_analyze(all_signals)
+        all_signals = stage_collect(persist=False)
+        analyzed = stage_analyze(all_signals, persist=False)
         stage_publish(analyzed)
 
-    log_rate_limits()
+    if args.layer in ("collect", "all"):
+        log_rate_limits()
+
     log.info("Run complete.")
 
 
