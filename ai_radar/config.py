@@ -47,7 +47,7 @@ if os.environ.get("AI_RADAR_SKIP_VALIDATION") != "1":
     _skip_notion_dbs = DRY_RUN
     for _var in REQUIRED_VARS:
         if os.environ.get(_var) is None:
-            if _skip_notion_dbs and _var.startswith("NOTION_DB_") or _var == "NOTION_PARENT_PAGE_ID":
+            if _skip_notion_dbs and (_var.startswith("NOTION_DB_") or _var == "NOTION_PARENT_PAGE_ID"):
                 continue
             print(f"[CONFIG] Missing required: {_var}")
             sys.exit(1)
