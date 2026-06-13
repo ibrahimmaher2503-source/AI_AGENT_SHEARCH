@@ -10,6 +10,15 @@ NOTION_BASE = "https://api.notion.com/v1"
 NOTION_VERSION = "2022-06-28"
 
 
+class NotionConfigError(RuntimeError):
+    """Raised for non-recoverable Notion configuration problems.
+
+    These (invalid API token, database not shared with the integration) will
+    fail identically for every request, so we abort immediately with an
+    actionable message rather than retrying for the whole job timeout.
+    """
+
+
 def _headers():
     return {
         "Authorization": f"Bearer {config.NOTION_API_KEY}",
@@ -30,6 +39,13 @@ def _notion_request(method, url, payload=None):
                 print(f"[NOTION] 429 received, retrying after 2s...")
                 time.sleep(2)
                 continue
+            if resp.status_code == 401:
+                # Invalid token — every subsequent call fails the same way.
+                # Abort fast instead of looping for the whole job timeout.
+                raise NotionConfigError(
+                    "Notion API token is invalid (HTTP 401). Set a valid "
+                    "NOTION_API_KEY secret from https://www.notion.so/my-integrations"
+                )
             if resp.status_code >= 400:
                 print(f"[NOTION] Error {resp.status_code}: {resp.text[:200]}")
                 return None
@@ -38,6 +54,31 @@ def _notion_request(method, url, payload=None):
             print(f"[NOTION] Request failed: {e}")
             return None
     return None
+
+
+def verify_credentials():
+    """Verify the Notion token works before doing real publishing work.
+
+    Returns True when the token is valid (or when DRY_RUN skips Notion).
+    Raises NotionConfigError on an invalid token so the run aborts immediately
+    with a clear message instead of timing out on repeated failures.
+    """
+    if config.DRY_RUN:
+        return True
+    resp = requests.get(f"{NOTION_BASE}/users/me", headers=_headers(), timeout=30)
+    if resp.status_code == 401:
+        raise NotionConfigError(
+            "Notion API token is invalid (HTTP 401). Set a valid NOTION_API_KEY "
+            "secret from https://www.notion.so/my-integrations"
+        )
+    if resp.status_code >= 400:
+        raise NotionConfigError(
+            f"Could not verify Notion credentials (HTTP {resp.status_code}): "
+            f"{resp.text[:200]}"
+        )
+    bot_name = resp.json().get("name", "integration")
+    print(f"[NOTION] Authenticated as '{bot_name}'")
+    return True
 
 
 def query_database(db_id, filter_payload=None):
