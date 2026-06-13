@@ -369,6 +369,8 @@ def _publish_items(items, db_id, build_fn, type_name, dedup_fn):
 def run(analyzed):
     """Publish all analyzed items to Notion databases. Returns stats dict."""
     print("[PUBLISHER] Starting publication to Notion databases")
+    # Fail fast on bad credentials rather than looping through every item.
+    notion_client.verify_credentials()
     stats = {}
 
     # 1. Models
